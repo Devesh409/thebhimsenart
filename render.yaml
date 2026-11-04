@@ -1,0 +1,18 @@
+# Blueprint for deploying THEBHIMSENART on Render.com
+# Supports both Static Site deployment (zero-cost CDN) and Web Service deployment
+
+services:
+  - type: web
+    name: thebhimsenart-gallery
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /artworks/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

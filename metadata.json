@@ -1,0 +1,6 @@
+{
+  "name": "THEBHIMSENART – Interactive 3D Art Gallery & Portfolio",
+  "description": "Immersive 3D art gallery and portfolio website for fine artist & content creator Ganesh Shimpi, featuring museum-grade 3D artwork frames, virtual gallery walkthrough, and full artwork management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>THEBHIMSENART | Ganesh Shimpi – Interactive 3D Art Gallery</title>
+    <meta name="description" content="Immersive 3D art gallery and portfolio of fine artist & content creator Ganesh Shimpi. Expressive portraits in watercolor, acrylic, and digital illustration from Mumbai, India." />
+    <meta property="og:title" content="THEBHIMSENART | Ganesh Shimpi – 3D Art Gallery" />
+    <meta property="og:description" content="Portraits in paint, ink and pixels. Explore the interactive 3D virtual museum gallery of Ganesh Shimpi." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/artworks/portrait-reimagined.jpg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      (function () {
+        try {
+          var originalFetch = window.fetch;
+          if (originalFetch) {
+            Object.defineProperty(window, 'fetch', {
+              value: originalFetch,
+              writable: true,
+              configurable: true,
+            });
+          }
+        } catch (e) {}
+
+        window.addEventListener(
+          'error',
+          function (e) {
+            if (
+              (e.filename && e.filename.indexOf('chrome-extension://') !== -1) ||
+              (e.message && e.message.indexOf('Cannot set property fetch of #<Window>') !== -1)
+            ) {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              return false;
+            }
+          },
+          true
+        );
+
+        window.addEventListener(
+          'unhandledrejection',
+          function (e) {
+            if (
+              e.reason &&
+              e.reason.message &&
+              e.reason.message.indexOf('Cannot set property fetch of #<Window>') !== -1
+            ) {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+            }
+          },
+          true
+        );
+      })();
+    </script>
+  </head>
+  <body class="bg-[#0b0b0e] text-[#e8e4dc] selection:bg-[#c5a880]/30 selection:text-[#faf6ee] antialiased">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
