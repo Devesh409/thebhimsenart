@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Primitive Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email_verified == true && (
+          request.auth.token.email == 'deveshshinde04@gmail.com' ||
+          request.auth.token.email == 'artbyganesh2002@gmail.com'
+        ))
+      );
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidInquiry(data) {
+      return data.keys().hasAll(['name', 'email', 'brand', 'subject', 'message', 'read', 'createdAt']) &&
+             data.keys().hasOnly(['name', 'email', 'brand', 'subject', 'message', 'read', 'createdAt']) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+             data.brand is string && data.brand.size() <= 150 &&
+             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 200 &&
+             data.message is string && data.message.size() >= 1 && data.message.size() <= 4000 &&
+             data.read is bool &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidArtwork(data) {
+      return data.keys().hasAll([
+               'id', 'number', 'title', 'medium', 'category', 'year',
+               'description', 'technique', 'dimensions', 'imageUrl',
+               'featured', 'status', 'tags', 'viewsCount', 'likesCount', 'allowDownload'
+             ]) &&
+             data.keys().hasOnly([
+               'id', 'number', 'title', 'medium', 'category', 'year',
+               'description', 'technique', 'dimensions', 'imageUrl',
+               'featured', 'status', 'tags', 'viewsCount', 'likesCount', 'allowDownload'
+             ]) &&
+             data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+             data.number is string && data.number.size() >= 1 && data.number.size() <= 20 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.medium is string && data.medium.size() >= 1 && data.medium.size() <= 100 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 100 &&
+             data.year is string && data.year.size() >= 1 && data.year.size() <= 20 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 3000 &&
+             data.technique is string && data.technique.size() <= 3000 &&
+             data.dimensions is string && data.dimensions.size() <= 300 &&
+             data.imageUrl is string && data.imageUrl.size() >= 1 && data.imageUrl.size() <= 900000 &&
+             data.featured is bool &&
+             data.status is string && (data.status == 'published' || data.status == 'draft') &&
+             data.tags is list && data.tags.size() >= 1 && data.tags.size() <= 10 && data.tags[0] is string && data.tags[0].size() <= 60 &&
+             data.viewsCount is number && data.viewsCount >= 0 &&
+             data.likesCount is number && data.likesCount >= 0 &&
+             data.allowDownload is bool;
+    }
+
+    // 4. Collection Rules
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && request.auth.uid == adminId;
+      allow list, create, update, delete: if false;
+    }
+
+    match /inquiries/{inquiryId} {
+      // Any visitor can submit an inquiry with strict schema, server timestamp, and initial unread state
+      allow create: if isValidId(inquiryId) &&
+                       isValidInquiry(incoming()) &&
+                       incoming().read == false &&
+                       incoming().createdAt == request.time;
+
+      // Reading, updating read status, and deleting inquiries
+      allow get: if isValidId(inquiryId) && isVerifiedAdmin();
+      allow list: if isVerifiedAdmin() && (existing().read == true || existing().read == false);
+
+      allow update: if isValidId(inquiryId) &&
+                       isValidInquiry(incoming()) &&
+                       isVerifiedAdmin() &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['read']) &&
+                       incoming().name == existing().name &&
+                       incoming().email == existing().email &&
+                       incoming().brand == existing().brand &&
+                       incoming().subject == existing().subject &&
+                       incoming().message == existing().message &&
+                       incoming().createdAt == existing().createdAt;
+
+      allow delete: if isValidId(inquiryId) && isVerifiedAdmin();
+    }
+
+    match /artworks/{artworkId} {
+      allow get: if isValidId(artworkId) && (existing().status == 'published' || isVerifiedAdmin());
+      allow list: if existing().status == 'published' || isVerifiedAdmin();
+
+      allow create: if isValidId(artworkId) &&
+                       isValidArtwork(incoming()) &&
+                       incoming().id == artworkId &&
+                       isVerifiedAdmin();
+
+      allow update: if isValidId(artworkId) &&
+                       isValidArtwork(incoming()) &&
+                       incoming().id == existing().id && (
+                         isVerifiedAdmin() ||
+                         (
+                           existing().status == 'published' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['viewsCount', 'likesCount']) &&
+                           incoming().viewsCount >= existing().viewsCount &&
+                           incoming().likesCount >= existing().likesCount
+                         )
+                       );
+
+      allow delete: if isValidId(artworkId) && isVerifiedAdmin();
+    }
+  }
+}

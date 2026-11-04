@@ -1,0 +1,159 @@
+{
+  "entities": {
+    "Inquiry": {
+      "title": "Inquiry",
+      "description": "Customer inquiry submitted via the public contact form.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Customer full name",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Customer email address",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "brand": {
+          "type": "string",
+          "description": "Optional brand or organization name",
+          "maxLength": 150
+        },
+        "subject": {
+          "type": "string",
+          "description": "Inquiry subject line",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "message": {
+          "type": "string",
+          "description": "Customer message body",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether the admin has marked the inquiry as read"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of creation"
+        }
+      },
+      "required": ["name", "email", "brand", "subject", "message", "read", "createdAt"]
+    },
+    "Artwork": {
+      "title": "Artwork",
+      "description": "Artwork catalog entry in the 3D gallery.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "number": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "medium": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "year": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3000
+        },
+        "technique": {
+          "type": "string",
+          "maxLength": 3000
+        },
+        "dimensions": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "imageUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 900000
+        },
+        "featured": {
+          "type": "boolean"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["published", "draft"]
+        },
+        "tags": {
+          "type": "array",
+          "description": "Bounded list of up to 10 tags"
+        },
+        "viewsCount": {
+          "type": "number"
+        },
+        "likesCount": {
+          "type": "number"
+        },
+        "allowDownload": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "number",
+        "title",
+        "medium",
+        "category",
+        "year",
+        "description",
+        "technique",
+        "dimensions",
+        "imageUrl",
+        "featured",
+        "status",
+        "tags",
+        "viewsCount",
+        "likesCount",
+        "allowDownload"
+      ]
+    }
+  },
+  "firestore": {
+    "/inquiries/{inquiryId}": {
+      "schema": {
+        "$ref": "#/entities/Inquiry"
+      },
+      "description": "Stores customer inquiries submitted from the public contact section."
+    },
+    "/artworks/{artworkId}": {
+      "schema": {
+        "$ref": "#/entities/Artwork"
+      },
+      "description": "Stores artworks for the 3D gallery and portfolio."
+    }
+  }
+}

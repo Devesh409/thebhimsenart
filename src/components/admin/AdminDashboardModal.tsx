@@ -48,6 +48,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ onClos
     updateSocialLinks,
     markInquiryRead,
     deleteInquiry,
+    refreshInquiries,
     resetToDefaults,
     exportBackup,
     importBackup
@@ -88,7 +89,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ onClos
     if (loginAdmin(passcode)) {
       setAuthError('');
     } else {
-      setAuthError('Incorrect passcode. Use: thebhimsenart2026');
+      setAuthError('Invalid admin passcode. Please try again.');
     }
   };
 
@@ -318,18 +319,6 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ onClos
               className="w-full py-3 rounded-xl bg-[#d4af37] hover:bg-[#c29d2b] text-[#0b0b0e] font-semibold text-sm transition shadow-lg"
             >
               Sign In to Dashboard
-            </button>
-
-            {/* Quick Demo Fill Helper */}
-            <button
-              type="button"
-              onClick={() => {
-                setPasscode('thebhimsenart2026');
-                loginAdmin('thebhimsenart2026');
-              }}
-              className="text-xs text-[#d4af37] hover:underline block mx-auto pt-2"
-            >
-              Quick Login as Artist Ganesh Shimpi (Passcode: thebhimsenart2026)
             </button>
           </form>
         </div>
@@ -1053,16 +1042,27 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({ onClos
           {/* TAB 5: INQUIRIES */}
           {activeTab === 'inquiries' && (
             <div>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
                   <h4 className="text-lg font-serif text-[#faf6ee]">Collector & Brand Inquiries</h4>
-                  <p className="text-xs text-[#a8a29e]">Messages submitted through the public contact form.</p>
+                  <p className="text-xs text-[#a8a29e]">
+                    Customer inquiries are stored directly in the local database (`data/inquiries_db.json` &amp; browser storage).
+                  </p>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={refreshInquiries}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-[#d4af37] font-semibold transition"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  <span>Refresh Local Inbox ({inquiries.length})</span>
+                </button>
               </div>
 
               {inquiries.length === 0 ? (
                 <div className="p-8 text-center rounded-2xl bg-white/5 text-xs text-[#a8a29e]">
-                  No inquiries received yet. New messages from collectors will appear here.
+                  No inquiries received yet. Submit a message in the Contact section and it will appear here immediately.
                 </div>
               ) : (
                 <div className="space-y-3">

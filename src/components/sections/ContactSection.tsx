@@ -15,14 +15,17 @@ export const ContactSection: React.FC = () => {
 
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string>('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.email || !form.message) return;
 
     setLoading(true);
-    setTimeout(() => {
-      submitInquiry({
+    setSubmitError('');
+
+    try {
+      const ok = await submitInquiry({
         name: form.name,
         email: form.email,
         brand: form.brand,
@@ -31,10 +34,17 @@ export const ContactSection: React.FC = () => {
       });
 
       setLoading(false);
-      setSubmitted(true);
-      setForm({ name: '', email: '', brand: '', subject: '', message: '' });
-      setTimeout(() => setSubmitted(false), 5000);
-    }, 500);
+      if (ok) {
+        setSubmitted(true);
+        setForm({ name: '', email: '', brand: '', subject: '', message: '' });
+        setTimeout(() => setSubmitted(false), 6000);
+      } else {
+        setSubmitError('Could not save inquiry to cloud database. Please try again.');
+      }
+    } catch (err) {
+      setLoading(false);
+      setSubmitError('An error occurred while submitting your inquiry. Please try again.');
+    }
   };
 
   return (
@@ -118,10 +128,10 @@ export const ContactSection: React.FC = () => {
                 >
                   <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
                   <h4 className="text-lg font-serif text-[#faf6ee] font-medium mb-1">
-                    Inquiry Logged in Studio Inbox
+                    Inquiry Stored in Studio Database
                   </h4>
                   <p className="text-xs text-[#a8a29e] max-w-sm mx-auto">
-                    Thank you for reaching out to Ganesh Shimpi. Your message has been saved and will be reviewed shortly.
+                    Thank you for reaching out to Ganesh Shimpi. Your inquiry has been securely saved to the cloud studio inbox and will be reviewed shortly.
                   </p>
                 </div>
               ) : (
@@ -135,6 +145,7 @@ export const ContactSection: React.FC = () => {
                         id="contact-name"
                         type="text"
                         required
+                        maxLength={120}
                         value={form.name}
                         onChange={e => setForm({ ...form, name: e.target.value })}
                         placeholder="Your Name"
@@ -150,6 +161,7 @@ export const ContactSection: React.FC = () => {
                         id="contact-email"
                         type="email"
                         required
+                        maxLength={200}
                         value={form.email}
                         onChange={e => setForm({ ...form, email: e.target.value })}
                         placeholder="you@company.com"
@@ -166,6 +178,7 @@ export const ContactSection: React.FC = () => {
                       <input
                         id="contact-brand"
                         type="text"
+                        maxLength={150}
                         value={form.brand}
                         onChange={e => setForm({ ...form, brand: e.target.value })}
                         placeholder="e.g. Montex / Art Collector"
@@ -180,6 +193,7 @@ export const ContactSection: React.FC = () => {
                       <input
                         id="contact-subject"
                         type="text"
+                        maxLength={200}
                         value={form.subject}
                         onChange={e => setForm({ ...form, subject: e.target.value })}
                         placeholder="Original Artwork / Sponsorship"
@@ -195,6 +209,7 @@ export const ContactSection: React.FC = () => {
                     <textarea
                       id="contact-message"
                       required
+                      maxLength={4000}
                       rows={4}
                       value={form.message}
                       onChange={e => setForm({ ...form, message: e.target.value })}
@@ -203,13 +218,17 @@ export const ContactSection: React.FC = () => {
                     />
                   </div>
 
+                  {submitError && (
+                    <p className="text-xs text-rose-400">{submitError}</p>
+                  )}
+
                   <button
                     type="submit"
                     disabled={loading}
                     className="w-full sm:w-auto px-8 py-3 min-h-[44px] rounded-lg bg-[#d4af37] hover:bg-[#e3c14d] text-[#0b0b0e] text-xs font-semibold smooth-transition shadow-lg inline-flex items-center justify-center gap-2"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>{loading ? 'Sending Inquiry...' : 'Submit Inquiry'}</span>
+                    <span>{loading ? 'Saving Inquiry...' : 'Submit Inquiry'}</span>
                   </button>
                 </form>
               )}

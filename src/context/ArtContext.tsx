@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Artwork, ArtistProfile, SocialLink, ContactInquiry } from '../types/artwork';
 import { INITIAL_ARTWORKS, INITIAL_ARTIST_PROFILE, INITIAL_SOCIAL_LINKS } from '../data/initialData';
 
@@ -17,9 +17,9 @@ interface ArtContextType {
   setTheme: (theme: 'museum-dark' | 'candlelight' | 'monochrome') => void;
   setSelectedArtworkId: (id: string | null) => void;
   setIsAdminOpen: (open: boolean) => void;
-  addArtwork: (artwork: Partial<Artwork> & { title: string; imageUrl: string; medium: string }) => Artwork;
-  updateArtwork: (id: string, updated: Partial<Artwork>) => void;
-  deleteArtwork: (id: string) => void;
+  addArtwork: (artwork: Partial<Artwork> & { title: string; imageUrl: string; medium: string }) => Promise<Artwork>;
+  updateArtwork: (id: string, updated: Partial<Artwork>) => Promise<void>;
+  deleteArtwork: (id: string) => Promise<void>;
   reorderArtworks: (newOrder: Artwork[]) => void;
   toggleFavorite: (id: string) => void;
   isFavorite: (id: string) => boolean;
@@ -27,11 +27,12 @@ interface ArtContextType {
   likeArtwork: (id: string) => void;
   updateProfile: (profile: Partial<ArtistProfile>) => void;
   updateSocialLinks: (links: SocialLink[]) => void;
-  submitInquiry: (inquiry: Omit<ContactInquiry, 'id' | 'createdAt' | 'read'>) => boolean;
-  markInquiryRead: (id: string) => void;
-  deleteInquiry: (id: string) => void;
+  submitInquiry: (inquiry: Omit<ContactInquiry, 'id' | 'createdAt' | 'read'>) => Promise<boolean>;
+  markInquiryRead: (id: string) => Promise<void>;
+  deleteInquiry: (id: string) => Promise<void>;
+  refreshInquiries: () => Promise<void>;
   loginAdmin: (passcode: string) => boolean;
-  logoutAdmin: () => void;
+  logoutAdmin: () => Promise<void>;
   resetToDefaults: () => void;
   exportBackup: () => string;
   importBackup: (jsonStr: string) => boolean;
@@ -53,7 +54,6 @@ const ADMIN_PASSCODE = 'thebhimsenart2026';
 const ArtContext = createContext<ArtContextType | undefined>(undefined);
 
 export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // 1. Artworks
   const [artworks, setArtworks] = useState<Artwork[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ARTWORKS);
@@ -64,7 +64,6 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_ARTWORKS;
   });
 
-  // 2. Profile
   const [profile, setProfile] = useState<ArtistProfile>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.PROFILE);
@@ -75,7 +74,6 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_ARTIST_PROFILE;
   });
 
-  // 3. Social Links
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SOCIAL);
@@ -86,7 +84,6 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return INITIAL_SOCIAL_LINKS;
   });
 
-  // 4. Inquiries
   const [inquiries, setInquiries] = useState<ContactInquiry[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.INQUIRIES);
@@ -94,21 +91,9 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.error('Error loading inquiries from localStorage', e);
     }
-    return [
-      {
-        id: 'inq-initial-1',
-        name: 'Montex Fine Stationery',
-        email: 'collaborations@montexpen.com',
-        brand: 'Montex India',
-        subject: 'Ball Pen Portrait Masterclass Series',
-        message: 'Loved your expressive pen sketches on Instagram! We would love to collaborate on a sponsored reel series and workshop featuring our micro-tip collection.',
-        createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-        read: true
-      }
-    ];
+    return [];
   });
 
-  // 5. Favorites
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.FAVORITES);
@@ -119,7 +104,6 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return ['portrait-reimagined'];
   });
 
-  // 6. Visitor count
   const [visitorCount, setVisitorCount] = useState<number>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.VISITOR_COUNT);
@@ -129,7 +113,6 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // 7. Theme
   const [activeTheme, setActiveTheme] = useState<'museum-dark' | 'candlelight' | 'monochrome'>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.THEME);
@@ -140,7 +123,6 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return 'museum-dark';
   });
 
-  // 8. Admin states
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
     try {
@@ -150,10 +132,68 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
-  // 9. Selected artwork modal
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
 
-  // Sync to URL hash/query on mount
+  // Sync customer inquiries with the local server database (/api/inquiries) + localStorage
+  const refreshInquiries = useCallback(async () => {
+    try {
+      const res = await fetch('/api/inquiries');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.inquiries)) {
+          setInquiries(prev => {
+            // Merge server local DB records with any existing browser localStorage records
+            const map = new Map<string, ContactInquiry>();
+            data.inquiries.forEach((item: ContactInquiry) => map.set(item.id, item));
+            prev.forEach(item => {
+              if (!map.has(item.id)) {
+                map.set(item.id, item);
+              }
+            });
+            const merged = Array.from(map.values()).sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            try {
+              localStorage.setItem(STORAGE_KEYS.INQUIRIES, JSON.stringify(merged));
+            } catch (e) {
+              // ignore
+            }
+            return merged;
+          });
+        }
+      }
+    } catch (e) {
+      // Fallback to localStorage if running as static build without server
+      try {
+        const saved = localStorage.getItem(STORAGE_KEYS.INQUIRIES);
+        if (saved) setInquiries(JSON.parse(saved));
+      } catch (err) {
+        // ignore
+      }
+    }
+  }, []);
+
+  // Load inquiries on mount and when Admin Portal opens
+  useEffect(() => {
+    refreshInquiries();
+  }, [refreshInquiries, isAdminOpen]);
+
+  // Listen to storage events across tabs in the same browser
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEYS.INQUIRIES && e.newValue) {
+        try {
+          setInquiries(JSON.parse(e.newValue));
+        } catch (err) {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  // URL search parameter sync
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const artQuery = params.get('artwork');
@@ -164,7 +204,6 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // Increment visitor count once per session
     const hasVisitedThisSession = sessionStorage.getItem('thebhimsenart_visited');
     if (!hasVisitedThisSession) {
       sessionStorage.setItem('thebhimsenart_visited', 'true');
@@ -180,7 +219,6 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Update URL search parameter when selectedArtworkId changes
   useEffect(() => {
     const url = new URL(window.location.href);
     if (selectedArtworkId) {
@@ -191,7 +229,6 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.history.replaceState({}, '', url.toString());
   }, [selectedArtworkId]);
 
-  // Save changes to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.ARTWORKS, JSON.stringify(artworks));
@@ -246,8 +283,15 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const publishedArtworks = artworks.filter(a => a.status === 'published');
 
-  const addArtwork = (artData: Partial<Artwork> & { title: string; imageUrl: string; medium: string }): Artwork => {
-    const idSlug = artData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `art-${Date.now()}`;
+  const addArtwork = async (
+    artData: Partial<Artwork> & { title: string; imageUrl: string; medium: string }
+  ): Promise<Artwork> => {
+    const idSlug =
+      artData.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+        .slice(0, 100) || `art-${Date.now()}`;
     const nextNumber = String(artworks.length + 1).padStart(2, '0');
 
     const newArt: Artwork = {
@@ -279,11 +323,11 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newArt;
   };
 
-  const updateArtwork = (id: string, updated: Partial<Artwork>) => {
-    setArtworks(prev => prev.map(a => a.id === id ? { ...a, ...updated } : a));
+  const updateArtwork = async (id: string, updated: Partial<Artwork>) => {
+    setArtworks(prev => prev.map(a => (a.id === id ? { ...a, ...updated } : a)));
   };
 
-  const deleteArtwork = (id: string) => {
+  const deleteArtwork = async (id: string) => {
     setArtworks(prev => prev.filter(a => a.id !== id));
     if (selectedArtworkId === id) {
       setSelectedArtworkId(null);
@@ -295,23 +339,17 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleFavorite = (id: string) => {
-    setFavorites(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(item => item !== id);
-      } else {
-        return [...prev, id];
-      }
-    });
+    setFavorites(prev => (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]));
   };
 
   const isFavorite = (id: string) => favorites.includes(id);
 
   const recordArtworkView = (id: string) => {
-    setArtworks(prev => prev.map(a => a.id === id ? { ...a, viewsCount: a.viewsCount + 1 } : a));
+    setArtworks(prev => prev.map(a => (a.id === id ? { ...a, viewsCount: a.viewsCount + 1 } : a)));
   };
 
   const likeArtwork = (id: string) => {
-    setArtworks(prev => prev.map(a => a.id === id ? { ...a, likesCount: a.likesCount + 1 } : a));
+    setArtworks(prev => prev.map(a => (a.id === id ? { ...a, likesCount: a.likesCount + 1 } : a)));
   };
 
   const updateProfile = (newProfile: Partial<ArtistProfile>) => {
@@ -322,23 +360,105 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSocialLinks(links);
   };
 
-  const submitInquiry = (inquiry: Omit<ContactInquiry, 'id' | 'createdAt' | 'read'>): boolean => {
-    const newInquiry: ContactInquiry = {
-      ...inquiry,
-      id: `inq-${Date.now()}`,
+  // Store customer inquiry strictly in the Local Database (Server JSON file + Browser localStorage)
+  const submitInquiry = async (
+    inquiry: Omit<ContactInquiry, 'id' | 'createdAt' | 'read'>
+  ): Promise<boolean> => {
+    const cleanName = String(inquiry.name || 'Visitor').trim().slice(0, 120) || 'Visitor';
+    const cleanEmail = String(inquiry.email || '').trim().slice(0, 200);
+    const cleanBrand = String(inquiry.brand || '').trim().slice(0, 150);
+    const cleanSubject =
+      String(inquiry.subject || 'Artwork Acquisition / Brand Collaboration')
+        .trim()
+        .slice(0, 200) || 'Artwork Inquiry';
+    const cleanMessage = String(inquiry.message || '').trim().slice(0, 4000);
+
+    let savedRecord: ContactInquiry = {
+      id: `inq_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      name: cleanName,
+      email: cleanEmail,
+      brand: cleanBrand,
+      subject: cleanSubject,
+      message: cleanMessage,
       createdAt: new Date().toISOString(),
       read: false
     };
-    setInquiries(prev => [newInquiry, ...prev]);
+
+    // 1. Save to Local Server JSON Database (/api/inquiries)
+    try {
+      const response = await fetch('/api/inquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: cleanName,
+          email: cleanEmail,
+          brand: cleanBrand,
+          subject: cleanSubject,
+          message: cleanMessage
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.inquiry) {
+          savedRecord = data.inquiry;
+        }
+      }
+    } catch (e) {
+      // Static build fallback uses browser localStorage directly
+    }
+
+    // 2. Save synchronously to browser localStorage and update React state
+    setInquiries(prev => {
+      const next = [savedRecord, ...prev.filter(item => item.id !== savedRecord.id)];
+      try {
+        localStorage.setItem(STORAGE_KEYS.INQUIRIES, JSON.stringify(next));
+      } catch (e) {
+        console.error('Error saving inquiry to localStorage', e);
+      }
+      return next;
+    });
+
     return true;
   };
 
-  const markInquiryRead = (id: string) => {
-    setInquiries(prev => prev.map(inq => inq.id === id ? { ...inq, read: true } : inq));
+  const markInquiryRead = async (id: string) => {
+    setInquiries(prev => {
+      const next = prev.map(inq => (inq.id === id ? { ...inq, read: true } : inq));
+      try {
+        localStorage.setItem(STORAGE_KEYS.INQUIRIES, JSON.stringify(next));
+      } catch (e) {
+        // ignore
+      }
+      return next;
+    });
+
+    try {
+      await fetch(`/api/inquiries/${encodeURIComponent(id)}/read`, {
+        method: 'PATCH'
+      });
+    } catch (e) {
+      // ignore
+    }
   };
 
-  const deleteInquiry = (id: string) => {
-    setInquiries(prev => prev.filter(inq => inq.id !== id));
+  const deleteInquiry = async (id: string) => {
+    setInquiries(prev => {
+      const next = prev.filter(inq => inq.id !== id);
+      try {
+        localStorage.setItem(STORAGE_KEYS.INQUIRIES, JSON.stringify(next));
+      } catch (e) {
+        // ignore
+      }
+      return next;
+    });
+
+    try {
+      await fetch(`/api/inquiries/${encodeURIComponent(id)}`, {
+        method: 'DELETE'
+      });
+    } catch (e) {
+      // ignore
+    }
   };
 
   const loginAdmin = (passcode: string): boolean => {
@@ -349,12 +469,13 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (e) {
         // ignore
       }
+      refreshInquiries();
       return true;
     }
     return false;
   };
 
-  const logoutAdmin = () => {
+  const logoutAdmin = async () => {
     setIsAdminAuthenticated(false);
     try {
       localStorage.removeItem(STORAGE_KEYS.ADMIN_AUTH);
@@ -376,15 +497,19 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const exportBackup = (): string => {
-    return JSON.stringify({
-      version: '1.0',
-      exportedAt: new Date().toISOString(),
-      artworks,
-      profile,
-      socialLinks,
-      inquiries,
-      visitorCount
-    }, null, 2);
+    return JSON.stringify(
+      {
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        artworks,
+        profile,
+        socialLinks,
+        inquiries,
+        visitorCount
+      },
+      null,
+      2
+    );
   };
 
   const importBackup = (jsonStr: string): boolean => {
@@ -432,6 +557,7 @@ export const ArtProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitInquiry,
         markInquiryRead,
         deleteInquiry,
+        refreshInquiries,
         loginAdmin,
         logoutAdmin,
         resetToDefaults,
